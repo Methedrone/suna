@@ -9,7 +9,6 @@ import React, {
 } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
-import { Button } from '@/components/ui/button';
 import {
   ArrowDown,
   CheckCircle,
@@ -527,6 +526,10 @@ export default function ThreadPage({
     }
   }, [agentRunId, startStreaming, currentHookRunId]);
 
+  const scrollToBottom = (behavior: ScrollBehavior = 'smooth') => {
+    messagesEndRef.current?.scrollIntoView({ behavior });
+  };
+
   useEffect(() => {
     let isMounted = true;
 
@@ -861,11 +864,6 @@ export default function ThreadPage({
     return () => observer.disconnect();
   }, [messages, streamingTextContent, streamingToolCall, setShowScrollButton]);
 
-  const handleScrollButtonClick = () => {
-    scrollToBottom('smooth');
-    setUserHasScrolled(false);
-  };
-
   useEffect(() => {
     console.log(
       `[PAGE] 🔄 Page AgentStatus: ${agentStatus}, Hook Status: ${streamHookStatus}, Target RunID: ${agentRunId || 'none'}, Hook RunID: ${currentHookRunId || 'none'}`,
@@ -895,6 +893,43 @@ export default function ThreadPage({
       setFileToView(null);
     }
     setFileViewerOpen(true);
+  }, []);
+
+  // Process the assistant call data
+  const toolViewAssistant = useCallback((assistantContent?: string) => {
+    // This needs to stay simple as it's meant for the side panel tool call view
+    if (!assistantContent) return null;
+
+    return (
+      <div className="space-y-1">
+        <div className="text-xs font-medium text-muted-foreground">Assistant Message</div>
+        <div className="rounded-md border bg-muted/50 p-3">
+          <Markdown className="text-xs prose prose-xs dark:prose-invert chat-markdown max-w-none">{assistantContent}</Markdown>
+        </div>
+      </div>
+    );
+  }, []);
+
+  // Process the tool result data
+  const toolViewResult = useCallback((toolContent?: string, isSuccess?: boolean) => {
+    if (!toolContent) return null;
+
+    return (
+      <div className="space-y-1">
+        <div className="flex justify-between items-center">
+          <div className="text-xs font-medium text-muted-foreground">Tool Result</div>
+          <div className={`px-2 py-0.5 rounded-full text-xs ${isSuccess
+            ? 'bg-green-50 text-green-700 dark:bg-green-900 dark:text-green-300'
+            : 'bg-red-50 text-red-700 dark:bg-red-900 dark:text-red-300'
+            }`}>
+            {isSuccess ? 'Success' : 'Failed'}
+          </div>
+        </div>
+        <div className="rounded-md border bg-muted/50 p-3">
+          <Markdown className="text-xs prose prose-xs dark:prose-invert chat-markdown max-w-none">{toolContent}</Markdown>
+        </div>
+      </div>
+    );
   }, []);
 
   // Automatically detect and populate tool calls from messages
@@ -943,7 +978,7 @@ export default function ThreadPage({
               toolName = assistantContentParsed.tool_calls[0].name || 'unknown';
             }
           }
-        } catch {}
+        } catch { }
 
         // Skip adding <ask> tags to the tool calls
         if (toolName === 'ask' || toolName === 'complete') {
