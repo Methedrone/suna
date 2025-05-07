@@ -51,6 +51,8 @@ import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Card, CardContent } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
+import { FileAttachment } from './file-attachment';
+import { AttachmentGroup } from './attachment-group';
 
 // Define API_URL
 const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL || '';
@@ -81,6 +83,7 @@ interface UploadedFile {
   name: string;
   path: string;
   size: number;
+  localUrl?: string;
 }
 
 // Define interface for the ref
@@ -315,7 +318,7 @@ export const ChatInput = forwardRef<ChatInputHandles, ChatInputProps>(
 
     // New function to handle files locally when there's no sandboxId
     const handleLocalFiles = (files: File[]) => {
-      const filteredFiles = files.filter((file) => {
+      const filteredFiles = files.filter(file => {
         if (file.size > 50 * 1024 * 1024) {
           toast.error(`File size exceeds 50MB limit: ${file.name}`);
           return false;
@@ -324,20 +327,42 @@ export const ChatInput = forwardRef<ChatInputHandles, ChatInputProps>(
       });
 
       // Store the files in pendingFiles state
-      setPendingFiles((prevFiles) => [...prevFiles, ...filteredFiles]);
+      setPendingFiles(prevFiles => [...prevFiles, ...filteredFiles]);
 
-      // Also add to uploadedFiles for UI display
-      const newUploadedFiles: UploadedFile[] = filteredFiles.map((file) => ({
+      // Create object URLs for the files and add to uploadedFiles for UI display
+      const newUploadedFiles: UploadedFile[] = filteredFiles.map(file => ({
         name: file.name,
         path: `/workspace/${file.name}`, // This is just for display purposes
         size: file.size,
+        localUrl: URL.createObjectURL(file) // Add local preview URL
       }));
 
-      setUploadedFiles((prev) => [...prev, ...newUploadedFiles]);
-      filteredFiles.forEach((file) => {
-        toast.success(`File attached: ${file.name} (pending upload)`);
+      setUploadedFiles(prev => [...prev, ...newUploadedFiles]);
+      filteredFiles.forEach(file => {
+        toast.success(`File attached: ${file.name}`);
       });
     };
+
+    // Clean up object URLs when component unmounts or files are removed
+    useEffect(() => {
+      return () => {
+        // Clean up any object URLs to avoid memory leaks
+        uploadedFiles.forEach(file => {
+          if (file.localUrl) {
+            URL.revokeObjectURL(file.localUrl);
+          }
+        });
+      };
+    }, []);
+
+    // // Add a function to clean up URL when removing a file
+    // const removeUploadedFile = (index: number) => {
+    //   const file = uploadedFiles[index];
+    //   if (file?.localUrl) {
+    //     URL.revokeObjectURL(file.localUrl);
+    //   }
+    //   setUploadedFiles(prev => prev.filter((_, i) => i !== index));
+    // };
 
     const uploadFiles = async (files: File[]) => {
       try {

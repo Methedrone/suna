@@ -411,6 +411,10 @@ export default function ThreadPage({
           }
         }
       }
+
+      if (event.key === 'Escape' && isSidePanelOpen) {
+        setIsSidePanelOpen(false);
+      }
     };
 
     window.addEventListener('keydown', handleKeyDown);
@@ -526,6 +530,17 @@ export default function ThreadPage({
     }
   }, [agentRunId, startStreaming, currentHookRunId]);
 
+  const handleKeyDown = (event: KeyboardEvent) => {
+    if (event.key === 'Escape' && isSidePanelOpen) {
+      setIsSidePanelOpen(false);
+    }
+  };
+
+  useEffect(() => {
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isSidePanelOpen]);
+
   const scrollToBottom = (behavior: ScrollBehavior = 'smooth') => {
     messagesEndRef.current?.scrollIntoView({ behavior });
   };
@@ -546,8 +561,6 @@ export default function ThreadPage({
 
         if (!isMounted) return;
 
-        console.log('[PAGE] Thread data loaded:', threadData);
-
         if (threadData?.project_id) {
           console.log(
             '[PAGE] Getting project data for project_id:',
@@ -555,10 +568,6 @@ export default function ThreadPage({
           );
           const projectData = await getProject(threadData.project_id);
           if (isMounted && projectData) {
-            console.log('[PAGE] Project data loaded:', projectData);
-            console.log('[PAGE] Project ID:', projectData.id);
-            console.log('[PAGE] Project sandbox data:', projectData.sandbox);
-
             // Set project data
             setProject(projectData);
 
@@ -576,9 +585,6 @@ export default function ThreadPage({
         if (!messagesLoadedRef.current) {
           const messagesData = await getMessages(threadId);
           if (isMounted) {
-            // Log raw messages fetched from API
-            console.log('[PAGE] Raw messages fetched:', messagesData);
-
             // Map API message type to UnifiedMessage type
             const unifiedMessages = (messagesData || [])
               .filter((msg) => msg.type !== 'status')
@@ -681,6 +687,7 @@ export default function ThreadPage({
             });
 
             messagesLoadedRef.current = true;
+
             if (!hasInitiallyScrolled.current) {
               scrollToBottom('auto');
               hasInitiallyScrolled.current = true;
@@ -896,41 +903,53 @@ export default function ThreadPage({
   }, []);
 
   // Process the assistant call data
-  const toolViewAssistant = useCallback((assistantContent?: string) => {
-    // This needs to stay simple as it's meant for the side panel tool call view
-    if (!assistantContent) return null;
+  const toolViewAssistant = useCallback(
+    (assistantContent?: string, toolContent?: string) => {
+      // This needs to stay simple as it's meant for the side panel tool call view
+      if (!assistantContent) return null;
 
-    return (
-      <div className="space-y-1">
-        <div className="text-xs font-medium text-muted-foreground">Assistant Message</div>
-        <div className="rounded-md border bg-muted/50 p-3">
-          <Markdown className="text-xs prose prose-xs dark:prose-invert chat-markdown max-w-none">{assistantContent}</Markdown>
-        </div>
-      </div>
-    );
-  }, []);
-
-  // Process the tool result data
-  const toolViewResult = useCallback((toolContent?: string, isSuccess?: boolean) => {
-    if (!toolContent) return null;
-
-    return (
-      <div className="space-y-1">
-        <div className="flex justify-between items-center">
-          <div className="text-xs font-medium text-muted-foreground">Tool Result</div>
-          <div className={`px-2 py-0.5 rounded-full text-xs ${isSuccess
-            ? 'bg-green-50 text-green-700 dark:bg-green-900 dark:text-green-300'
-            : 'bg-red-50 text-red-700 dark:bg-red-900 dark:text-red-300'
-            }`}>
-            {isSuccess ? 'Success' : 'Failed'}
+      return (
+        <div className="space-y-1">
+          <div className="text-xs font-medium text-muted-foreground">
+            Assistant Message
+          </div>
+          <div className="rounded-md border bg-muted/50 p-3">
+            <div className="text-xs prose prose-xs dark:prose-invert chat-markdown max-w-none">{assistantContent}</div>
           </div>
         </div>
-        <div className="rounded-md border bg-muted/50 p-3">
-          <Markdown className="text-xs prose prose-xs dark:prose-invert chat-markdown max-w-none">{toolContent}</Markdown>
+      );
+    },
+    [],
+  );
+
+  // Process the tool result data
+  const toolViewResult = useCallback(
+    (toolContent?: string, isSuccess?: boolean) => {
+      if (!toolContent) return null;
+
+      return (
+        <div className="space-y-1">
+          <div className="flex justify-between items-center">
+            <div className="text-xs font-medium text-muted-foreground">
+              Tool Result
+            </div>
+            <div
+              className={`px-2 py-0.5 rounded-full text-xs ${isSuccess
+                ? 'bg-green-50 text-green-700 dark:bg-green-900 dark:text-green-300'
+                : 'bg-red-50 text-red-700 dark:bg-red-900 dark:text-red-300'
+                }`}
+            >
+              {isSuccess ? 'Success' : 'Failed'}
+            </div>
+          </div>
+          <div className="rounded-md border bg-muted/50 p-3">
+            <div className="text-xs prose prose-xs dark:prose-invert chat-markdown max-w-none">{toolContent}</div>
+          </div>
         </div>
-      </div>
-    );
-  }, []);
+      );
+    },
+    [],
+  );
 
   // Automatically detect and populate tool calls from messages
   useEffect(() => {
@@ -1401,7 +1420,12 @@ export default function ThreadPage({
     isLoading,
   ]);
 
-  if (isLoading && !initialLoadCompleted.current) {
+  // Main rendering function for the thread page
+  if (!initialLoadCompleted.current || isLoading) {
+    // Use the new ThreadSkeleton component instead of inline skeleton
+    return <ThreadSkeleton isSidePanelOpen={isSidePanelOpen} />;
+  } else if (error) {
+    // Error state...
     return (
       <div className="flex h-screen">
         <div
@@ -1532,11 +1556,12 @@ export default function ThreadPage({
                   'JSON object requested, multiple (or no) rows returned',
                 )
                   ? 'This thread either does not exist or you do not have access to it.'
-                  : error}
-              </p>
-            </div>
-          </div>
-        </div>
+                  : error
+                }
+              </p >
+            </div >
+          </div >
+        </div >
         <ToolCallSidePanel
           isOpen={isSidePanelOpen && initialLoadCompleted.current}
           onClose={() => setIsSidePanelOpen(false)}
@@ -1979,25 +2004,26 @@ export default function ThreadPage({
         isLoading={!initialLoadCompleted.current || isLoading}
       />
 
-      {sandboxId && (
-        <FileViewerModal
-          open={fileViewerOpen}
-          onOpenChange={setFileViewerOpen}
-          sandboxId={sandboxId}
-          initialFilePath={fileToView}
-          project={project || undefined}
-        />
-      )}
+        {sandboxId && (
+          <FileViewerModal
+            open={fileViewerOpen}
+            onOpenChange={setFileViewerOpen}
+            sandboxId={sandboxId}
+            initialFilePath={fileToView}
+            project={project || undefined}
+          />
+        )}
 
-      {/* Billing Alert for usage limit */}
-      <BillingErrorAlert
-        message={billingData.message}
-        currentUsage={billingData.currentUsage}
-        limit={billingData.limit}
-        accountId={billingData.accountId}
-        onDismiss={() => setShowBillingAlert(false)}
-        isOpen={showBillingAlert}
-      />
-    </div>
-  );
+        {/* Billing Alert for usage limit */}
+        <BillingErrorAlert
+          message={billingData.message}
+          currentUsage={billingData.currentUsage}
+          limit={billingData.limit}
+          accountId={billingData.accountId}
+          onDismiss={() => setShowBillingAlert(false)}
+          isOpen={showBillingAlert}
+        />
+      </div>
+    );
+  }
 }

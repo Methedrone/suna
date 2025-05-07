@@ -1,6 +1,6 @@
 'use client';
 
-import React, { forwardRef } from 'react';
+import React, { forwardRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Paperclip, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -34,11 +34,12 @@ const handleLocalFiles = (
     name: file.name,
     path: `/workspace/${file.name}`,
     size: file.size,
+    localUrl: URL.createObjectURL(file)
   }));
 
   setUploadedFiles((prev) => [...prev, ...newUploadedFiles]);
   filteredFiles.forEach((file) => {
-    toast.success(`File attached: ${file.name} (pending upload)`);
+    toast.success(`File attached: ${file.name}`);
   });
 };
 
@@ -154,6 +155,21 @@ export const FileUploadHandler = forwardRef<
     },
     ref,
   ) => {
+    // Clean up object URLs when component unmounts
+    useEffect(() => {
+      return () => {
+        // Clean up any object URLs to avoid memory leaks
+        setUploadedFiles(prev => {
+          prev.forEach(file => {
+            if (file.localUrl) {
+              URL.revokeObjectURL(file.localUrl);
+            }
+          });
+          return prev;
+        });
+      };
+    }, []);
+
     const handleFileUpload = () => {
       if (ref && 'current' in ref && ref.current) {
         ref.current.click();
