@@ -106,5 +106,10 @@
     "tailwindcss": "^4",
     "tw-animate-css": "^1.2.4",
     "typescript": "^5"
-  }
+  },
+  "trustedDependencies": [
+    "@parcel/watcher",
+    "@vercel/speed-insights",
+    "core-js"
+  ]
 }
