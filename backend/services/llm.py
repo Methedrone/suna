@@ -20,6 +20,13 @@ litellm.set_verbose=True # Enable verbose logging for LiteLLM
 from utils.logger import logger
 from utils.config import config
 
+# Import Vertex AI service if available
+try:
+    from services.vertex_ai import vertex_ai_service, VERTEX_AI_AVAILABLE
+except ImportError:
+    logger.warning("Vertex AI service module not available")
+    VERTEX_AI_AVAILABLE = False
+
 litellm.modify_params=True
 
 # Constants
@@ -58,6 +65,15 @@ def setup_api_keys() -> None:
     aws_access_key = config.AWS_ACCESS_KEY_ID
     aws_secret_key = config.AWS_SECRET_ACCESS_KEY
     aws_region = config.AWS_REGION_NAME
+    
+    # Initialize Vertex AI if enabled
+    if config.VERTEX_AI_ENABLED and config.GCP_PROJECT_ID:
+        try:
+            # Vertex AI initialization is handled by the service module
+            logger.debug("Vertex AI enabled and will be initialized with the service")
+        except Exception as e:
+            logger.error(f"Error initializing Vertex AI: {str(e)}")
+            # Don't raise here, as some other LLMs might still work
 
     if aws_access_key and aws_secret_key and aws_region:
         logger.debug(f"AWS credentials set for Bedrock in region: {aws_region}")
@@ -330,6 +346,23 @@ async def make_llm_api_call(
         enable_thinking=enable_thinking,
         reasoning_effort=reasoning_effort
     )
+    # Handle Vertex AI models
+    if VERTEX_AI_AVAILABLE and (model_name.startswith("vertex/") or (config.VERTEX_AI_ENABLED and model_name.startswith("gemini/"))):
+        logger.info(f"Using Vertex AI service for model: {model_name}")
+        try:
+            return await vertex_ai_service.generate_content(
+                model_name=model_name,
+                messages=messages,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                stream=stream,
+                top_p=top_p
+            )
+        except Exception as e:
+            logger.error(f"Vertex AI service error: {str(e)}")
+            raise LLMError(f"Vertex AI API call failed: {str(e)}")
+
+    # Standard liteLLM flow for other models
     last_error = None
     for attempt in range(MAX_RETRIES):
         try:

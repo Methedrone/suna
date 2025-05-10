@@ -196,9 +196,15 @@ class ThreadManager:
         
         # Determine which API key to use based on the model
         api_key = None
-        if llm_model.startswith("gemini/"):
+        if llm_model.startswith("gemini/") and not app_config.VERTEX_AI_ENABLED:
+            # Only use custom Gemini API key if Vertex AI is not enabled
             api_key = app_config.GEMINI_API_KEY
             logger.debug("Using custom Gemini API key")
+        
+        # Log Vertex AI usage if applicable
+        if app_config.VERTEX_AI_ENABLED and (llm_model.startswith("vertex/") or llm_model.startswith("gemini/")):
+            logger.debug(f"Using Vertex AI for model: {llm_model} with project: {app_config.GCP_PROJECT_ID}")
+            # No need to set api_key for Vertex AI as it uses Google Cloud credentials
 
         logger.info(f"Using model: {llm_model}")
         # Log parameters
