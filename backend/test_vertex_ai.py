@@ -8,8 +8,19 @@ It verifies that the Vertex AI services can be initialized and used to generate 
 import os
 import asyncio
 import logging
-from dotenv import load_dotenv
 import sys
+
+# Próba importu dotenv, ale kontynuuj nawet jeśli nie jest dostępny
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+    print("Załadowano zmienne środowiskowe z pliku .env")
+except ImportError:
+    print("Uwaga: Moduł dotenv nie jest zainstalowany. Korzystam z istniejących zmiennych środowiskowych.")
+    # Funkcja zastępcza, żeby kod działał dalej
+    def load_dotenv():
+        print("Pominięto ładowanie .env (brak modułu dotenv)")
+        pass
 
 # Configure logging
 logging.basicConfig(

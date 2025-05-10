@@ -273,9 +273,9 @@ DEFAULT_MEDIUM_EFFORT_MODEL = "gemini/gemini-2.5-flash-preview"
 DEFAULT_HIGH_EFFORT_MODEL = "openai/gpt-4o"
 
 # Vertex AI model names
-VERTEX_DEFAULT_LOW_EFFORT_MODEL = "vertex/gemini-1.5-flash"
-VERTEX_DEFAULT_MEDIUM_EFFORT_MODEL = "vertex/gemini-1.5-pro"
-VERTEX_DEFAULT_HIGH_EFFORT_MODEL = "vertex/gemini-1.5-pro"
+VERTEX_DEFAULT_LOW_EFFORT_MODEL = "gemini-2.5-flash-preview-04-17"
+VERTEX_DEFAULT_MEDIUM_EFFORT_MODEL = "gemini-2.5-flash-preview-04-17"
+VERTEX_DEFAULT_HIGH_EFFORT_MODEL = "gemini-2.5-pro-preview-05-06"
 
 def get_model_for_effort(effort: str, effort_to_model_map: Dict[str, str]) -> str:
     """

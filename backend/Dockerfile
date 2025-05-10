@@ -21,7 +21,7 @@ RUN useradd -m -u 1000 appuser && \
 
 # Install Python dependencies
 COPY --chown=appuser:appuser requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt gunicorn uvicorn
+RUN pip install --no-cache-dir -r requirements.txt gunicorn uvicorn google-cloud-aiplatform dotenv 
 
 # Switch to non-root user
 USER appuser
