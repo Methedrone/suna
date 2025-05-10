@@ -86,6 +86,28 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 
+# CORS Middleware Configuration
+if config.ENV_MODE == EnvMode.LOCAL:
+    logger.info("CORS: Development mode detected (EnvMode.LOCAL). Allowing all origins.")
+    allow_origins = ["*"]
+elif config.ALLOWED_CORS_ORIGINS:
+    logger.info(f"CORS: Allowing specific origins from config: {config.ALLOWED_CORS_ORIGINS}")
+    allow_origins = config.ALLOWED_CORS_ORIGINS
+else:
+    logger.warning(
+        "CORS: No specific origins configured and not in development mode. Defaulting to allow all origins. "
+        "IMPORTANT: For production, configure ALLOWED_CORS_ORIGINS in your .env file or other configuration source."
+    )
+    allow_origins = ["*"]  # Fallback, ensure this is reviewed for production
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=allow_origins,
+    allow_credentials=True,
+    allow_methods=["*"],  # Allows all methods
+    allow_headers=["*"],  # Allows all headers
+)
+
 @app.middleware("http")
 async def log_requests_middleware(request: Request, call_next):
     start_time = time.time()
@@ -101,31 +123,13 @@ async def log_requests_middleware(request: Request, call_next):
     try:
         response = await call_next(request)
         process_time = time.time() - start_time
-        logger.debug(f"Request completed: {method} {path} | Status: {response.status_code} | Time: {process_time:.2f}s")
+        # Log the completed request
+        logger.info(f"Request completed: {method} {path} | Status: {response.status_code} | Time: {process_time:.2f}s")
         return response
     except Exception as e:
         process_time = time.time() - start_time
         logger.error(f"Request failed: {method} {path} | Error: {str(e)} | Time: {process_time:.2f}s")
         raise
-
-# Define allowed origins based on environment
-allowed_origins = ["https://www.suna.so", "https://suna.so", "https://staging.suna.so", "http://localhost:3000"]
-
-# Add staging-specific origins
-if config.ENV_MODE == EnvMode.STAGING:
-    allowed_origins.append("http://localhost:3000")
-    
-# Add local-specific origins
-if config.ENV_MODE == EnvMode.LOCAL:
-    allowed_origins.append("http://localhost:3000")
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=allowed_origins,
-    allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allow_headers=["Content-Type", "Authorization"],
-)
 
 # Include the agent router with a prefix
 app.include_router(agent_api.router, prefix="/api")

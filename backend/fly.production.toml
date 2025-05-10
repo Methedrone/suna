@@ -1,10 +1,10 @@
-# fly.toml app configuration file generated for backend-production-ogog on 2025-04-21T00:36:09+01:00
+# fly.toml app configuration file generated for backend-production-ogog on 2025-04-21T01:32:15+02:00
 #
 # See https://fly.io/docs/reference/configuration/ for information about how to use this file.
 #
 
 app = 'backend-production-ogog'
-primary_region = 'bos'
+primary_region = 'cdg'
 
 [build]
   dockerfile = 'Dockerfile'
@@ -18,9 +18,9 @@ primary_region = 'bos'
   processes = ['app']
 
 [[vm]]
-  memory = '16gb'
-  cpu_kind = 'performance'
-  cpus = 8
+  memory = '8gb'
+  cpu_kind = 'shared'
+  cpus = 4
 
 [env]
   ENV_MODE = "production"

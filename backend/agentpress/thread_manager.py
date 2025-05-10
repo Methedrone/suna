@@ -22,6 +22,7 @@ from agentpress.response_processor import (
 )
 from services.supabase import DBConnection
 from utils.logger import logger
+from utils.config import get_model_for_effort, config as app_config
 
 # Type alias for tool choice
 ToolChoice = Literal["auto", "required", "none"]
@@ -188,6 +189,23 @@ class ThreadManager:
         """
 
         logger.info(f"Starting thread execution for thread {thread_id}")
+
+        # Determine the actual model to use based on effort
+        llm_model = get_model_for_effort(reasoning_effort, app_config.EFFORT_TO_MODEL)
+        logger.debug(f"Using model: {llm_model} for reasoning effort: {reasoning_effort}")
+        
+        # Determine which API key to use based on the model
+        api_key = None
+        if llm_model.startswith("gemini/") and not app_config.VERTEX_AI_ENABLED:
+            # Only use custom Gemini API key if Vertex AI is not enabled
+            api_key = app_config.GEMINI_API_KEY
+            logger.debug("Using custom Gemini API key")
+        
+        # Log Vertex AI usage if applicable
+        if app_config.VERTEX_AI_ENABLED and (llm_model.startswith("vertex/") or llm_model.startswith("gemini/")):
+            logger.debug(f"Using Vertex AI for model: {llm_model} with project: {app_config.GCP_PROJECT_ID}")
+            # No need to set api_key for Vertex AI as it uses Google Cloud credentials
+
         logger.info(f"Using model: {llm_model}")
         # Log parameters
         logger.info(f"Parameters: model={llm_model}, temperature={llm_temperature}, max_tokens={llm_max_tokens}")
@@ -331,7 +349,8 @@ Here are the XML tools available with examples:
                         tool_choice=tool_choice if processor_config.native_tool_calling else None,
                         stream=stream,
                         enable_thinking=enable_thinking,
-                        reasoning_effort=reasoning_effort
+                        reasoning_effort=reasoning_effort,
+                        api_key=api_key  # Pass the custom API key if set
                     )
                     logger.debug("Successfully received raw LLM API response stream/object")
 

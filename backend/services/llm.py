@@ -16,10 +16,20 @@ import json
 import asyncio
 from openai import OpenAIError
 import litellm
+litellm.set_verbose=True # Enable verbose logging for LiteLLM
 from utils.logger import logger
 from utils.config import config
 
-# litellm.set_verbose=True
+# Import Vertex AI service if available
+try:
+    from services.vertex_ai import vertex_ai_service, VERTEX_AI_AVAILABLE
+    # Verify that vertex_ai_service is actually available (not None)
+    VERTEX_AI_AVAILABLE = VERTEX_AI_AVAILABLE and vertex_ai_service is not None
+except ImportError:
+    logger.warning("Vertex AI service module not available")
+    VERTEX_AI_AVAILABLE = False
+    vertex_ai_service = None
+
 litellm.modify_params=True
 
 # Constants
@@ -37,11 +47,15 @@ class LLMRetryError(LLMError):
 
 def setup_api_keys() -> None:
     """Set up API keys from environment variables."""
-    providers = ['OPENAI', 'ANTHROPIC', 'GROQ', 'OPENROUTER']
+    providers = ['OPENAI', 'ANTHROPIC', 'GROQ', 'OPENROUTER', 'GOOGLE', 'GEMINI']
     for provider in providers:
         key = getattr(config, f'{provider}_API_KEY')
         if key:
             logger.debug(f"API key set for provider: {provider}")
+            # Set specific environment variables for certain providers
+            if provider == 'GEMINI':
+                os.environ['GEMINI_API_KEY'] = key
+                logger.debug("Set GEMINI_API_KEY environment variable for liteLLM")
         else:
             logger.warning(f"No API key found for provider: {provider}")
 
@@ -54,6 +68,15 @@ def setup_api_keys() -> None:
     aws_access_key = config.AWS_ACCESS_KEY_ID
     aws_secret_key = config.AWS_SECRET_ACCESS_KEY
     aws_region = config.AWS_REGION_NAME
+    
+    # Initialize Vertex AI if enabled
+    if config.VERTEX_AI_ENABLED and config.GCP_PROJECT_ID:
+        try:
+            # Vertex AI initialization is handled by the service module
+            logger.debug("Vertex AI enabled and will be initialized with the service")
+        except Exception as e:
+            logger.error(f"Error initializing Vertex AI: {str(e)}")
+            # Don't raise here, as some other LLMs might still work
 
     if aws_access_key and aws_secret_key and aws_region:
         logger.debug(f"AWS credentials set for Bedrock in region: {aws_region}")
@@ -88,14 +111,45 @@ def prepare_params(
     reasoning_effort: Optional[str] = 'low'
 ) -> Dict[str, Any]:
     """Prepare parameters for the API call."""
+    # Handle Vertex AI model name formatting
+    effective_model_name = model_name
+    is_vertex_model = False
+    
+    # Check if this is a Vertex AI model
+    if config.VERTEX_AI_ENABLED and (model_name.startswith("vertex/") or model_name.startswith("gemini/")):
+        # Convert our internal format (vertex/MODEL_NAME) to liteLLM format (vertex_ai/MODEL_NAME)
+        if model_name.startswith("vertex/"):
+            # Extract the model name part after the prefix
+            actual_model_name = model_name.split("/", 1)[1]
+            effective_model_name = f"vertex_ai/{actual_model_name}"
+            is_vertex_model = True
+            logger.info(f"Converted model name from {model_name} to {effective_model_name} for liteLLM")
+        elif model_name.startswith("gemini/") and "vertex" not in model_name:
+            # For Gemini models via Vertex AI, convert gemini/MODEL to vertex_ai/MODEL
+            actual_model_name = model_name.split("/", 1)[1]
+            # Map to corresponding Vertex AI model - gemini-2.5-flash-preview not available in Vertex yet,
+            # so map to gemini-1.5-flash
+            if "gemini-2.5-flash-preview" in actual_model_name:
+                actual_model_name = "gemini-1.5-flash"
+            effective_model_name = f"vertex_ai/{actual_model_name}"
+            is_vertex_model = True
+            logger.info(f"Converted Gemini model to Vertex AI format: {model_name} → {effective_model_name}")
+    
     params = {
-        "model": model_name,
+        "model": effective_model_name,
         "messages": messages,
         "temperature": temperature,
         "response_format": response_format,
         "top_p": top_p,
         "stream": stream,
     }
+    
+    # Add Vertex AI specific parameters
+    if is_vertex_model and config.VERTEX_AI_ENABLED:
+        params["vertex_ai_project"] = config.GCP_PROJECT_ID
+        params["vertex_ai_location"] = config.GCP_REGION
+        logger.info(f"Added Vertex AI parameters: project={config.GCP_PROJECT_ID}, location={config.GCP_REGION}")
+    
 
     if api_key:
         params["api_key"] = api_key
@@ -123,7 +177,36 @@ def prepare_params(
         })
         logger.debug(f"Added {len(tools)} tools to API parameters")
 
-    # # Add Claude-specific headers
+    # Detect model provider
+    if model_name.startswith("anthropic/") or model_name.startswith("anthropic."):
+        provider = "ANTHROPIC"
+    elif model_name.startswith("openai/") or model_name.startswith("openai."):
+        provider = "OPENAI"
+    elif model_name.startswith("groq/"):
+        provider = "GROQ"
+    elif model_name.startswith("openrouter/"):
+        provider = "OPENROUTER"
+    elif model_name.startswith("google/"):
+        provider = "GOOGLE"
+    elif model_name.startswith("gemini/"):
+        provider = "GEMINI"
+    else:
+        provider = None  # Unknown provider
+
+    # If no API key is provided, try to get it from config
+    if not api_key and provider:
+        api_key = getattr(config, f"{provider}_API_KEY", None)
+        if api_key:
+            params["api_key"] = api_key
+            logger.debug(f"Using {provider} API key from config")
+
+            # For Gemini, ensure we're using the correct model name format for liteLLM
+            if provider == "GEMINI" and model_name.startswith("gemini/"):
+                # Convert gemini/gemini-2.5-flash-preview to gemini/gemini-2.5-flash-preview
+                # This ensures the correct format for liteLLM to recognize Gemini models
+                logger.debug(f"Using Gemini model: {model_name}")
+
+    # Add Claude-specific headers
     if "claude" in model_name.lower() or "anthropic" in model_name.lower():
         params["extra_headers"] = {
             # "anthropic-beta": "max-tokens-3-5-sonnet-2024-07-15"
@@ -297,6 +380,31 @@ async def make_llm_api_call(
         enable_thinking=enable_thinking,
         reasoning_effort=reasoning_effort
     )
+    # Try using our custom Vertex AI service if available and appropriate
+    use_custom_vertex_service = VERTEX_AI_AVAILABLE and vertex_ai_service is not None and config.VERTEX_AI_ENABLED and (
+        model_name.startswith("vertex/") or model_name.startswith("gemini/")
+    )
+    
+    if use_custom_vertex_service:
+        logger.info(f"Attempting to use custom Vertex AI service for model: {model_name}")
+        try:
+            # Use our custom Vertex AI service instead of liteLLM
+            vertex_response = await vertex_ai_service.generate_content(
+                model_name=model_name,
+                messages=messages,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                stream=stream,
+                top_p=top_p
+            )
+            logger.info("Successfully used custom Vertex AI service")
+            return vertex_response
+        except Exception as e:
+            logger.warning(f"Custom Vertex AI service failed: {str(e)}. Falling back to liteLLM.")
+            # Continue to liteLLM flow - params were already properly prepared in prepare_params
+            # No need to raise an exception - just let the standard flow continue
+
+    # Standard liteLLM flow for other models
     last_error = None
     for attempt in range(MAX_RETRIES):
         try:
@@ -393,12 +501,35 @@ async def test_bedrock():
         print(f"Error testing Bedrock: {str(e)}")
         return False
 
+async def test_gemini():
+    """Test the Gemini integration with a simple query."""
+    test_messages = [
+        {"role": "user", "content": "Hello, can you give me a quick test response?"}
+    ]
+
+    try:
+        # Test with Gemini 2.5 Flash Preview model
+        print("\n--- Testing Gemini 2.5 Flash Preview model ---")
+        response = await make_llm_api_call(
+            model_name="gemini/gemini-2.5-flash-preview",
+            messages=test_messages,
+            temperature=0.7,
+            max_tokens=100
+        )
+        print(f"Response: {response.choices[0].message.content}")
+        print(f"Model used: {response.model}")
+        return True
+    except Exception as e:
+        print(f"Error testing Gemini: {str(e)}")
+        return False
+
 if __name__ == "__main__":
     import asyncio
 
-    test_success = asyncio.run(test_bedrock())
+    # Run test for Gemini
+    test_success = asyncio.run(test_gemini())
 
     if test_success:
-        print("\n✅ integration test completed successfully!")
+        print("\n✅ Gemini integration test completed successfully!")
     else:
-        print("\n❌ Bedrock integration test failed!")
+        print("\n❌ Gemini integration test failed!")

@@ -1,4 +1,4 @@
-FROM python:3.11-slim
+FROM python:3.13-slim
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1 \
@@ -21,7 +21,7 @@ RUN useradd -m -u 1000 appuser && \
 
 # Install Python dependencies
 COPY --chown=appuser:appuser requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt gunicorn
+RUN pip install --no-cache-dir -r requirements.txt gunicorn uvicorn google-cloud-aiplatform dotenv 
 
 # Switch to non-root user
 USER appuser
@@ -32,9 +32,9 @@ COPY --chown=appuser:appuser . .
 # Expose the port the app runs on
 EXPOSE 8000
 
-# Calculate optimal worker count based on 16 vCPUs
+# Calculate optimal worker count based on 8 vCPUs
 # Using (2*CPU)+1 formula for CPU-bound applications
-ENV WORKERS=33
+ENV WORKERS=9
 ENV THREADS=2
 ENV WORKER_CONNECTIONS=2000
 

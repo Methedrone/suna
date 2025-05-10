@@ -175,6 +175,9 @@ ANTHROPIC_API_KEY=
 # OpenAI API:
 OPENAI_API_KEY=your_openai_api_key
 
+# Google API:
+GOOGLE_API_KEY=your_google_api_key
+
 # Optional but recommended
 TAVILY_API_KEY=your_tavily_api_key  # For enhanced search capabilities
 FIRECRAWL_API_KEY=your_firecrawl_api_key  # For web scraping capabilities
@@ -293,4 +296,3 @@ The Docker Compose setup includes a Redis service that will be used by the backe
 ## License
 
 Kortix Suna is licensed under the Apache License, Version 2.0. See [LICENSE](./LICENSE) for the full license text.
-
