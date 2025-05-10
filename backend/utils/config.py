@@ -256,6 +256,45 @@ class Configuration:
             for key in get_type_hints(self.__class__).keys()
             if not key.startswith('_')
         }
-
-# Create a singleton instance
+    
+    # Create a singleton instance
 config = Configuration() 
+
+DEFAULT_LOW_EFFORT_MODEL = "gemini/gemini-2.5-flash-preview"
+DEFAULT_MEDIUM_EFFORT_MODEL = "gemini/gemini-2.5-flash-preview"
+DEFAULT_HIGH_EFFORT_MODEL = "openai/gpt-4o"
+
+def get_model_for_effort(effort: str, effort_to_model_map: Dict[str, str]) -> str:
+    """
+    Determines the appropriate LLM model based on the effort level.
+    Uses the provided mapping, falling back to global defaults if a mapping is not found
+    or if the mapped model is not available.
+    """
+    print(f"DEBUG_CONFIG_STANDALONE: get_model_for_effort called with effort='{effort}', map='{effort_to_model_map}'")
+    model = effort_to_model_map.get(effort.lower())
+    print(f"DEBUG_CONFIG_STANDALONE: model from map for effort '{effort.lower()}': {model}")
+
+    if model:
+        # Here, we should also check if this model is actually available/configured
+        # For now, assume if it's in the map, it's intended to be used.
+        print(f"DEBUG_CONFIG_STANDALONE: Returning model from map: {model}")
+        return model
+
+    print(f"DEBUG_CONFIG_STANDALONE: Model not found in map or was None. Falling back to global defaults.")
+    # Fallback to global default constants if specific effort level not in map or model is None
+    if effort.lower() == "low":
+        print(f"DEBUG_CONFIG_STANDALONE: Returning DEFAULT_LOW_EFFORT_MODEL: {DEFAULT_LOW_EFFORT_MODEL}")
+        return DEFAULT_LOW_EFFORT_MODEL
+    elif effort.lower() == "medium":
+        print(f"DEBUG_CONFIG_STANDALONE: Returning DEFAULT_MEDIUM_EFFORT_MODEL: {DEFAULT_MEDIUM_EFFORT_MODEL}")
+        return DEFAULT_MEDIUM_EFFORT_MODEL
+    elif effort.lower() == "high":
+        print(f"DEBUG_CONFIG_STANDALONE: Returning DEFAULT_HIGH_EFFORT_MODEL: {DEFAULT_HIGH_EFFORT_MODEL}")
+        return DEFAULT_HIGH_EFFORT_MODEL
+    
+    # Ultimate fallback if effort level is unknown
+    print(f"DEBUG_CONFIG_STANDALONE: Unknown effort level. Returning DEFAULT_MEDIUM_EFFORT_MODEL: {DEFAULT_MEDIUM_EFFORT_MODEL}")
+    return DEFAULT_MEDIUM_EFFORT_MODEL
+
+# Example of how to get a configuration value
+# api_key = config.OPENAI_API_KEY
