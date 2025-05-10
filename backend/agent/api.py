@@ -48,8 +48,10 @@ MODEL_NAME_ALIASES = {
     "claude-3-haiku": "anthropic/claude-3-haiku-20240307",
 
     # Google Gemini
-    "gemini-2.5-flash": "google/gemini-2.5-flash-preview", # Added Gemini model
-    "gemini-flash": "google/gemini-2.5-flash-preview",     # Common alias for Gemini Flash
+    "gemini-2.5-flash": "gemini/gemini-2.5-flash-preview", # Added Gemini model
+    "gemini-flash": "gemini/gemini-2.5-flash-preview",     # Common alias for Gemini Flash
+    "google/gemini-2.5-flash-preview": "gemini/gemini-2.5-flash-preview", # Alias the old name
+    "gemini/gemini-2.5-flash-preview": "gemini/gemini-2.5-flash-preview",  # Canonical name
 
     # Meta Llama (via OpenRouter or other providers)
     "llama3-70b": "meta-llama/llama-3-70b-instruct",
@@ -66,7 +68,6 @@ MODEL_NAME_ALIASES = {
     "anthropic/claude-3-opus-20240229": "anthropic/claude-3-opus-20240229",
     "anthropic/claude-3-sonnet-20240229": "anthropic/claude-3-sonnet-20240229",
     "anthropic/claude-3-haiku-20240307": "anthropic/claude-3-haiku-20240307",
-    "google/gemini-2.5-flash-preview": "google/gemini-2.5-flash-preview", # Ensure it resolves to itself
     "meta-llama/llama-3-70b-instruct": "meta-llama/llama-3-70b-instruct",
     "meta-llama/llama-3-8b-instruct": "meta-llama/llama-3-8b-instruct",
     "mistralai/mixtral-8x7b-instruct": "mistralai/mixtral-8x7b-instruct"

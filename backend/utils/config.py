@@ -124,7 +124,14 @@ class Configuration:
     AWS_REGION_NAME: Optional[str] = None
     
     # Model configuration
-    MODEL_TO_USE: Optional[str] = "google/gemini-2.5-flash-preview"
+    MODEL_TO_USE: Optional[str] = "gemini/gemini-2.5-flash-preview"
+    
+    # Model selection based on effort
+    EFFORT_TO_MODEL: Dict[str, str] = {
+        "low": "gemini/gemini-2.5-flash-preview",  # Default for low effort
+        "medium": "gemini/gemini-2.5-flash-preview", # Default for medium effort
+        "high": "openai/gpt-4o", # Default for high effort
+    }
     
     # Supabase configuration
     SUPABASE_URL: str
