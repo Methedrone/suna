@@ -284,8 +284,15 @@ inspector_port = 8083
 # The Deno major version to use.
 deno_version = 1
 
-# [edge_runtime.secrets]
-# secret_key = "env(SECRET_VALUE)"
+[secrets]
+# Used by resources that need access to the OpenAI API
+openai_api_key = "env(OPENAI_API_KEY)"
+# Add other secrets as needed, e.g.
+# anthropic_api_key = "env(ANTHROPIC_API_KEY)"
+google_api_key = "env(GOOGLE_API_KEY)" # New Google Gemini API Key
+
+# For local development, you might want to use actual values
+# instead of environment variable references for easier testing.
 
 [analytics]
 enabled = true
@@ -308,4 +315,3 @@ s3_secret_key = "env(S3_SECRET_KEY)"
 
 [functions.billing-webhooks]
 verify_jwt = false
-

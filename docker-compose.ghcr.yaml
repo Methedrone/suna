@@ -22,7 +22,7 @@ services:
       - ./backend/.env:/app/.env:ro
     environment:
       - ENV_MODE=local
-      - REDIS_HOST=redis
+      - REDIS_HOST=localhost
       - REDIS_PORT=6379
       - REDIS_PASSWORD=
       - REDIS_SSL=False
@@ -37,7 +37,7 @@ services:
     volumes:
       - ./frontend/.env.local:/app/.env.local:ro
     environment:
-      - NODE_ENV=production
+      - NODE_ENV=local
     command: ["npm", "run", "dev"]
     depends_on:
       - backend

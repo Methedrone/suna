@@ -32,28 +32,44 @@ instance_id = None # Global instance ID for this backend instance
 REDIS_RESPONSE_LIST_TTL = 3600 * 24
 
 MODEL_NAME_ALIASES = {
-    # Short names to full names
-    "sonnet-3.7": "anthropic/claude-3-7-sonnet-latest",
+    # OpenAI
     "gpt-4.1": "openai/gpt-4.1-2025-04-14",
     "gpt-4o": "openai/gpt-4o",
     "gpt-4-turbo": "openai/gpt-4-turbo",
     "gpt-4": "openai/gpt-4",
-    "gemini-flash-2.5": "openrouter/google/gemini-2.5-flash-preview",
-    "grok-3": "xai/grok-3-fast-latest",
-    "deepseek": "openrouter/deepseek/deepseek-chat",
-    "grok-3-mini": "xai/grok-3-mini-fast-beta",
-    "qwen3": "openrouter/qwen/qwen3-235b-a22b", 
+    "gpt-3.5-turbo": "openai/gpt-3.5-turbo",
+    "gpt-3.5": "openai/gpt-3.5-turbo", # Common alias
+
+    # Anthropic
+    "sonnet-3.7": "anthropic/claude-3-7-sonnet-latest",
+    "claude-3.7-sonnet": "anthropic/claude-3-7-sonnet-latest",
+    "claude-3-opus": "anthropic/claude-3-opus-20240229",
+    "claude-3-sonnet": "anthropic/claude-3-sonnet-20240229",
+    "claude-3-haiku": "anthropic/claude-3-haiku-20240307",
+
+    # Google Gemini
+    "gemini-2.5-flash": "google/gemini-2.5-flash-preview", # Added Gemini model
+    "gemini-flash": "google/gemini-2.5-flash-preview",     # Common alias for Gemini Flash
+
+    # Meta Llama (via OpenRouter or other providers)
+    "llama3-70b": "meta-llama/llama-3-70b-instruct",
+    "llama3-8b": "meta-llama/llama-3-8b-instruct",
+    "mixtral-8x7b": "mistralai/mixtral-8x7b-instruct",
 
     # Also include full names as keys to ensure they map to themselves
-    "anthropic/claude-3-7-sonnet-latest": "anthropic/claude-3-7-sonnet-latest",
     "openai/gpt-4.1-2025-04-14": "openai/gpt-4.1-2025-04-14",
     "openai/gpt-4o": "openai/gpt-4o",
     "openai/gpt-4-turbo": "openai/gpt-4-turbo",
     "openai/gpt-4": "openai/gpt-4",
-    "openrouter/google/gemini-2.5-flash-preview": "openrouter/google/gemini-2.5-flash-preview",
-    "xai/grok-3-fast-latest": "xai/grok-3-fast-latest",
-    "deepseek/deepseek-chat": "openrouter/deepseek/deepseek-chat",
-    "xai/grok-3-mini-fast-beta": "xai/grok-3-mini-fast-beta",
+    "openai/gpt-3.5-turbo": "openai/gpt-3.5-turbo",
+    "anthropic/claude-3-7-sonnet-latest": "anthropic/claude-3-7-sonnet-latest",
+    "anthropic/claude-3-opus-20240229": "anthropic/claude-3-opus-20240229",
+    "anthropic/claude-3-sonnet-20240229": "anthropic/claude-3-sonnet-20240229",
+    "anthropic/claude-3-haiku-20240307": "anthropic/claude-3-haiku-20240307",
+    "google/gemini-2.5-flash-preview": "google/gemini-2.5-flash-preview", # Ensure it resolves to itself
+    "meta-llama/llama-3-70b-instruct": "meta-llama/llama-3-70b-instruct",
+    "meta-llama/llama-3-8b-instruct": "meta-llama/llama-3-8b-instruct",
+    "mistralai/mixtral-8x7b-instruct": "mistralai/mixtral-8x7b-instruct"
 }
 
 class AgentStartRequest(BaseModel):
