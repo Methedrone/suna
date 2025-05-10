@@ -37,11 +37,15 @@ class LLMRetryError(LLMError):
 
 def setup_api_keys() -> None:
     """Set up API keys from environment variables."""
-    providers = ['OPENAI', 'ANTHROPIC', 'GROQ', 'OPENROUTER', 'GOOGLE']
+    providers = ['OPENAI', 'ANTHROPIC', 'GROQ', 'OPENROUTER', 'GOOGLE', 'GEMINI']
     for provider in providers:
         key = getattr(config, f'{provider}_API_KEY')
         if key:
             logger.debug(f"API key set for provider: {provider}")
+            # Set specific environment variables for certain providers
+            if provider == 'GEMINI':
+                os.environ['GEMINI_API_KEY'] = key
+                logger.debug("Set GEMINI_API_KEY environment variable for liteLLM")
         else:
             logger.warning(f"No API key found for provider: {provider}")
 
@@ -123,7 +127,36 @@ def prepare_params(
         })
         logger.debug(f"Added {len(tools)} tools to API parameters")
 
-    # # Add Claude-specific headers
+    # Detect model provider
+    if model_name.startswith("anthropic/") or model_name.startswith("anthropic."):
+        provider = "ANTHROPIC"
+    elif model_name.startswith("openai/") or model_name.startswith("openai."):
+        provider = "OPENAI"
+    elif model_name.startswith("groq/"):
+        provider = "GROQ"
+    elif model_name.startswith("openrouter/"):
+        provider = "OPENROUTER"
+    elif model_name.startswith("google/"):
+        provider = "GOOGLE"
+    elif model_name.startswith("gemini/"):
+        provider = "GEMINI"
+    else:
+        provider = None  # Unknown provider
+
+    # If no API key is provided, try to get it from config
+    if not api_key and provider:
+        api_key = getattr(config, f"{provider}_API_KEY", None)
+        if api_key:
+            params["api_key"] = api_key
+            logger.debug(f"Using {provider} API key from config")
+
+            # For Gemini, ensure we're using the correct model name format for liteLLM
+            if provider == "GEMINI" and model_name.startswith("gemini/"):
+                # Convert gemini/gemini-2.5-flash-preview to gemini/gemini-2.5-flash-preview
+                # This ensures the correct format for liteLLM to recognize Gemini models
+                logger.debug(f"Using Gemini model: {model_name}")
+
+    # Add Claude-specific headers
     if "claude" in model_name.lower() or "anthropic" in model_name.lower():
         params["extra_headers"] = {
             # "anthropic-beta": "max-tokens-3-5-sonnet-2024-07-15"
@@ -393,12 +426,35 @@ async def test_bedrock():
         print(f"Error testing Bedrock: {str(e)}")
         return False
 
+async def test_gemini():
+    """Test the Gemini integration with a simple query."""
+    test_messages = [
+        {"role": "user", "content": "Hello, can you give me a quick test response?"}
+    ]
+
+    try:
+        # Test with Gemini 2.5 Flash Preview model
+        print("\n--- Testing Gemini 2.5 Flash Preview model ---")
+        response = await make_llm_api_call(
+            model_name="gemini/gemini-2.5-flash-preview",
+            messages=test_messages,
+            temperature=0.7,
+            max_tokens=100
+        )
+        print(f"Response: {response.choices[0].message.content}")
+        print(f"Model used: {response.model}")
+        return True
+    except Exception as e:
+        print(f"Error testing Gemini: {str(e)}")
+        return False
+
 if __name__ == "__main__":
     import asyncio
 
-    test_success = asyncio.run(test_bedrock())
+    # Run test for Gemini
+    test_success = asyncio.run(test_gemini())
 
     if test_success:
-        print("\n✅ integration test completed successfully!")
+        print("\n✅ Gemini integration test completed successfully!")
     else:
-        print("\n❌ Bedrock integration test failed!")
+        print("\n❌ Gemini integration test failed!")
