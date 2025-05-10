@@ -23,9 +23,12 @@ from utils.config import config
 # Import Vertex AI service if available
 try:
     from services.vertex_ai import vertex_ai_service, VERTEX_AI_AVAILABLE
+    # Verify that vertex_ai_service is actually available (not None)
+    VERTEX_AI_AVAILABLE = VERTEX_AI_AVAILABLE and vertex_ai_service is not None
 except ImportError:
     logger.warning("Vertex AI service module not available")
     VERTEX_AI_AVAILABLE = False
+    vertex_ai_service = None
 
 litellm.modify_params=True
 
@@ -108,14 +111,45 @@ def prepare_params(
     reasoning_effort: Optional[str] = 'low'
 ) -> Dict[str, Any]:
     """Prepare parameters for the API call."""
+    # Handle Vertex AI model name formatting
+    effective_model_name = model_name
+    is_vertex_model = False
+    
+    # Check if this is a Vertex AI model
+    if config.VERTEX_AI_ENABLED and (model_name.startswith("vertex/") or model_name.startswith("gemini/")):
+        # Convert our internal format (vertex/MODEL_NAME) to liteLLM format (vertex_ai/MODEL_NAME)
+        if model_name.startswith("vertex/"):
+            # Extract the model name part after the prefix
+            actual_model_name = model_name.split("/", 1)[1]
+            effective_model_name = f"vertex_ai/{actual_model_name}"
+            is_vertex_model = True
+            logger.info(f"Converted model name from {model_name} to {effective_model_name} for liteLLM")
+        elif model_name.startswith("gemini/") and "vertex" not in model_name:
+            # For Gemini models via Vertex AI, convert gemini/MODEL to vertex_ai/MODEL
+            actual_model_name = model_name.split("/", 1)[1]
+            # Map to corresponding Vertex AI model - gemini-2.5-flash-preview not available in Vertex yet,
+            # so map to gemini-1.5-flash
+            if "gemini-2.5-flash-preview" in actual_model_name:
+                actual_model_name = "gemini-1.5-flash"
+            effective_model_name = f"vertex_ai/{actual_model_name}"
+            is_vertex_model = True
+            logger.info(f"Converted Gemini model to Vertex AI format: {model_name} → {effective_model_name}")
+    
     params = {
-        "model": model_name,
+        "model": effective_model_name,
         "messages": messages,
         "temperature": temperature,
         "response_format": response_format,
         "top_p": top_p,
         "stream": stream,
     }
+    
+    # Add Vertex AI specific parameters
+    if is_vertex_model and config.VERTEX_AI_ENABLED:
+        params["vertex_ai_project"] = config.GCP_PROJECT_ID
+        params["vertex_ai_location"] = config.GCP_REGION
+        logger.info(f"Added Vertex AI parameters: project={config.GCP_PROJECT_ID}, location={config.GCP_REGION}")
+    
 
     if api_key:
         params["api_key"] = api_key
@@ -346,11 +380,16 @@ async def make_llm_api_call(
         enable_thinking=enable_thinking,
         reasoning_effort=reasoning_effort
     )
-    # Handle Vertex AI models
-    if VERTEX_AI_AVAILABLE and (model_name.startswith("vertex/") or (config.VERTEX_AI_ENABLED and model_name.startswith("gemini/"))):
-        logger.info(f"Using Vertex AI service for model: {model_name}")
+    # Try using our custom Vertex AI service if available and appropriate
+    use_custom_vertex_service = VERTEX_AI_AVAILABLE and vertex_ai_service is not None and config.VERTEX_AI_ENABLED and (
+        model_name.startswith("vertex/") or model_name.startswith("gemini/")
+    )
+    
+    if use_custom_vertex_service:
+        logger.info(f"Attempting to use custom Vertex AI service for model: {model_name}")
         try:
-            return await vertex_ai_service.generate_content(
+            # Use our custom Vertex AI service instead of liteLLM
+            vertex_response = await vertex_ai_service.generate_content(
                 model_name=model_name,
                 messages=messages,
                 temperature=temperature,
@@ -358,9 +397,12 @@ async def make_llm_api_call(
                 stream=stream,
                 top_p=top_p
             )
+            logger.info("Successfully used custom Vertex AI service")
+            return vertex_response
         except Exception as e:
-            logger.error(f"Vertex AI service error: {str(e)}")
-            raise LLMError(f"Vertex AI API call failed: {str(e)}")
+            logger.warning(f"Custom Vertex AI service failed: {str(e)}. Falling back to liteLLM.")
+            # Continue to liteLLM flow - params were already properly prepared in prepare_params
+            # No need to raise an exception - just let the standard flow continue
 
     # Standard liteLLM flow for other models
     last_error = None
