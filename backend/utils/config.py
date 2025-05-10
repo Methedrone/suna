@@ -227,6 +227,15 @@ class Configuration:
             error_msg = f"Missing required configuration fields: {', '.join(missing_fields)}"
             logger.error(error_msg)
             raise ValueError(error_msg)
+        
+        # Validate Stripe secrets only in non-local environments
+        if self.ENV_MODE != EnvMode.LOCAL:
+            if not self.STRIPE_SECRET_KEY or not self.STRIPE_WEBHOOK_SECRET:
+                error_msg = "Missing required Stripe configuration: STRIPE_SECRET_KEY and/or STRIPE_WEBHOOK_SECRET"
+                logger.error(error_msg)
+                raise ValueError(error_msg)
+        else:
+            logger.warning("Stripe secrets not set, skipping validation in local environment")
     
     def get(self, key: str, default: Any = None) -> Any:
         """Get a configuration value with an optional default."""
