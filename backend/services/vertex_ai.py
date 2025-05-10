@@ -16,6 +16,7 @@ from utils.logger import logger
 from utils.config import config
 
 # Check if we're running in an environment where Vertex AI SDK is available
+VERTEX_AI_AVAILABLE = False
 try:
     from vertexai.generative_models import GenerativeModel, ChatSession
     from vertexai.generative_models import GenerationConfig, Content, Part
@@ -23,34 +24,171 @@ try:
     VERTEX_AI_AVAILABLE = True
 except ImportError:
     logger.warning("Google Vertex AI SDK not available. Install with 'pip install google-cloud-aiplatform'")
-    VERTEX_AI_AVAILABLE = False
+    # Define placeholder classes to avoid NameErrors when the module is imported
+    class GenerativeModel:
+        pass
+    class ChatSession:
+        pass
+    class GenerationConfig:
+        pass
+    class Content:
+        pass
+    class Part:
+        @classmethod
+        def from_text(cls, text):
+            return text
+    class PreviewGenerativeModel(GenerativeModel):
+        pass
 
 class VertexAIService:
-    """Service for interacting with Google Vertex AI."""
+    """Service for interacting with Google Vertex AI.
+    This class provides methods for generating content using Vertex AI models.
+    """
     
     def __init__(self):
-        self.project_id = config.GCP_PROJECT_ID
-        self.location = config.GCP_REGION
-        self._models = {}  # Cache for GenerativeModel instances
-        self._initialize()
-    
+        # Import here to avoid errors if module is not available
+        try:
+            import vertexai
+            import google.cloud.aiplatform as aiplatform
+            from vertexai.generative_models import GenerativeModel, GenerationConfig
+            from google.oauth2 import service_account
+            import json
+            import os
+            
+            self.vertexai = vertexai
+            self.aiplatform = aiplatform
+            self.GenerativeModel = GenerativeModel
+            self.GenerationConfig = GenerationConfig
+            self.service_account = service_account
+            self.initialized = True
+            self.json = json
+            self.os = os
+            
+            # Setup verification to ensure credentials are valid
+            self._check_and_setup_credentials()
+            
+            self.project_id = config.GCP_PROJECT_ID
+            self.location = config.GCP_REGION
+            self._models = {}  # Cache for GenerativeModel instances
+            self._initialize()
+        except (ImportError, ModuleNotFoundError) as e:
+            logger.warning(f"Unable to import Vertex AI modules, service will be unavailable: {str(e)}")
+            self.initialized = False
+            
+    def _check_and_setup_credentials(self):
+        """Verify that credentials are available and set them up if possible.
+        This method tries different approaches to ensure Vertex AI can authenticate.
+        """
+        if not self.initialized:
+            logger.warning("VertexAI service not initialized, cannot set up credentials")
+            return False
+            
+        # 1. Check if GOOGLE_APPLICATION_CREDENTIALS environment variable is set
+        creds_path = self.os.environ.get('GOOGLE_APPLICATION_CREDENTIALS')
+        if creds_path and self.os.path.exists(creds_path):
+            logger.info(f"Using Google credentials from: {creds_path}")
+            return True
+            
+        # 2. Check for credentials in standard locations
+        # Try standard locations where gcloud credentials might be stored
+        default_locations = [
+            "~/.config/gcloud/application_default_credentials.json",
+            "~/.gcloud/application_default_credentials.json"
+        ]
+        
+        for loc in default_locations:
+            expanded_path = self.os.path.expanduser(loc)
+            if self.os.path.exists(expanded_path):
+                self.os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = expanded_path
+                logger.info(f"Set GOOGLE_APPLICATION_CREDENTIALS to found credentials at: {expanded_path}")
+                return True
+                
+        # 3. Check for credentials in configuration
+        if config.GCP_SERVICE_ACCOUNT_JSON:
+            try:
+                # Create a temporary file with the credentials
+                import tempfile
+                credentials_dict = self.json.loads(config.GCP_SERVICE_ACCOUNT_JSON)
+                
+                # Write the credentials to a temporary file
+                with tempfile.NamedTemporaryFile(mode='w+', suffix='.json', delete=False) as temp_file:
+                    self.json.dump(credentials_dict, temp_file)
+                    temp_path = temp_file.name
+                
+                # Set the environment variable to point to the credentials file
+                self.os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = temp_path
+                logger.info(f"Created temporary credentials file at: {temp_path}")
+                return True
+            except Exception as e:
+                logger.error(f"Failed to set up credentials from GCP_SERVICE_ACCOUNT_JSON: {str(e)}")
+        
+        logger.warning("No Google Cloud credentials found or set up. Vertex AI calls may fail.")
+        return False
+            
     def _initialize(self):
         """Initialize Vertex AI service."""
         if not VERTEX_AI_AVAILABLE:
-            logger.warning("Vertex AI SDK not available - skipping initialization")
+            logger.warning("Vertex AI modules not available, service not initialized.")
+            self.initialized = False
             return
             
         if not self.project_id:
-            logger.warning("GCP_PROJECT_ID not set - cannot initialize Vertex AI")
+            logger.error("GCP_PROJECT_ID is not set. Cannot initialize Vertex AI.")
+            self.initialized = False
             return
             
+        if not self.location:
+            logger.warning("GCP_REGION is not set. Using default value: us-central1")
+            self.location = "us-central1"
+            
         try:
-            # Initialize Vertex AI
-            import vertexai
-            vertexai.init(project=self.project_id, location=self.location)
-            logger.info(f"Initialized Vertex AI with project={self.project_id}, location={self.location}")
+            # Try to initialize with credentials from service account JSON if available
+            if config.GCP_SERVICE_ACCOUNT_JSON:
+                try:
+                    credentials_dict = self.json.loads(config.GCP_SERVICE_ACCOUNT_JSON)
+                    credentials = self.service_account.Credentials.from_service_account_info(credentials_dict)
+                    logger.info("Using credentials from GCP_SERVICE_ACCOUNT_JSON")
+                    
+                    # Initialize Vertex AI with explicit credentials
+                    self.vertexai.init(
+                        project=self.project_id, 
+                        location=self.location,
+                        credentials=credentials
+                    )
+                except Exception as e:
+                    logger.error(f"Failed to initialize Vertex AI with service account JSON: {str(e)}")
+                    logger.info("Falling back to application default credentials")
+                    self.vertexai.init(project=self.project_id, location=self.location)
+            else:
+                # Initialize with application default credentials
+                self.vertexai.init(project=self.project_id, location=self.location)
+                
+            logger.info(f"Successfully initialized Vertex AI with project={self.project_id}, location={self.location}")
+            
+            # Test connection by listing available models
+            try:
+                self._test_connection()
+                logger.info("Vertex AI connection successfully verified")
+            except Exception as e:
+                logger.warning(f"Vertex AI initialized but connection test failed: {str(e)}")
+                
         except Exception as e:
             logger.error(f"Failed to initialize Vertex AI: {str(e)}")
+            self.initialized = False
+            
+    def _test_connection(self):
+        """Test the connection to Vertex AI by listing models."""
+        if not self.initialized:
+            raise RuntimeError("Service not initialized")
+            
+        try:
+            # Perform a simple operation to verify connectivity
+            publisher_models = self.aiplatform.PublisherModel.list()
+            model_count = len(list(publisher_models))
+            logger.info(f"Successfully connected to Vertex AI. Found {model_count} publisher models.")
+            return True
+        except Exception as e:
+            logger.error(f"Connection test failed: {str(e)}")
             raise
     
     def get_model(self, model_name: str) -> Union[GenerativeModel, None]:
@@ -243,4 +381,15 @@ class VertexAIService:
             }
 
 # Create a singleton instance
-vertex_ai_service = VertexAIService()
+if VERTEX_AI_AVAILABLE:
+    try:
+        vertex_ai_service = VertexAIService()
+        logger.info("Vertex AI service initialized successfully")
+    except Exception as e:
+        logger.error(f"Failed to initialize Vertex AI service: {str(e)}")
+        # Create a dummy service that will gracefully fail if used
+        vertex_ai_service = None
+else:
+    logger.warning("Vertex AI SDK not available - creating a placeholder service")
+    # Create a dummy service
+    vertex_ai_service = VertexAIService()

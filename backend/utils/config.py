@@ -123,6 +123,7 @@ class Configuration:
     GCP_PROJECT_ID: Optional[str] = None
     GCP_REGION: Optional[str] = "us-central1"
     VERTEX_AI_ENABLED: bool = False
+    GCP_SERVICE_ACCOUNT_JSON: Optional[str] = None  # Service account credentials as JSON string
     
     # AWS Bedrock credentials
     AWS_ACCESS_KEY_ID: Optional[str] = None
