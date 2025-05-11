@@ -1617,9 +1617,19 @@ export default function ThreadPage({
                   const groupedMessages: MessageGroup[] = [];
                   let currentGroup: MessageGroup | null = null;
 
-                  messages.forEach((message, index) => {
-                    const messageType = message.type;
-                    const key = message.message_id || `msg-${index}`;
+          {/* Use ThreadContent component instead of custom message rendering */}
+          <ThreadContent
+            messages={messages}
+            streamingTextContent={streamingTextContent}
+            streamingToolCall={streamingToolCall}
+            agentStatus={agentStatus}
+            handleToolClick={handleToolClick}
+            handleOpenFileViewer={handleOpenFileViewer}
+            readOnly={false}
+            streamHookStatus={streamHookStatus}
+            sandboxId={sandboxId}
+            project={project}
+          />
 
                     if (messageType === 'user') {
                       if (currentGroup) {
