@@ -859,6 +859,22 @@ export const streamAgent = (
             return;
           }
 
+          // Check for error status messages
+          try {
+            const jsonData = JSON.parse(rawData);
+            if (jsonData.status === 'error') {
+              console.error(`[STREAM] Error status received for ${agentRunId}:`, jsonData);
+              
+              // Pass the error message to the callback
+              callbacks.onError(jsonData.message || 'Unknown error occurred');
+              
+              // Don't close the stream for error status messages as they may continue
+              return;
+            }
+          } catch (jsonError) {
+            // Not JSON or invalid JSON, continue with normal processing
+          }
+
           // Check for "Agent run not found" error
           if (
             rawData.includes('Agent run') &&
@@ -1119,6 +1135,19 @@ export const createSandboxFileJson = async (
   }
 };
 
+// Helper function to normalize file paths with Unicode characters
+function normalizePathWithUnicode(path: string): string {
+  try {
+    // Replace escaped Unicode sequences with actual characters
+    return path.replace(/\\u([0-9a-fA-F]{4})/g, (_, hexCode) => {
+      return String.fromCharCode(parseInt(hexCode, 16));
+    });
+  } catch (e) {
+    console.error('Error processing Unicode escapes in path:', e);
+    return path;
+  }
+}
+
 export const listSandboxFiles = async (
   sandboxId: string,
   path: string,
@@ -1130,7 +1159,12 @@ export const listSandboxFiles = async (
     } = await supabase.auth.getSession();
 
     const url = new URL(`${API_URL}/sandboxes/${sandboxId}/files`);
-    url.searchParams.append('path', path);
+    
+    // Normalize the path to handle Unicode escape sequences
+    const normalizedPath = normalizePathWithUnicode(path);
+    
+    // Properly encode the path parameter for UTF-8 support
+    url.searchParams.append('path', normalizedPath);
 
     const headers: Record<string, string> = {};
     if (session?.access_token) {
@@ -1173,7 +1207,12 @@ export const getSandboxFileContent = async (
     } = await supabase.auth.getSession();
 
     const url = new URL(`${API_URL}/sandboxes/${sandboxId}/files/content`);
-    url.searchParams.append('path', path);
+    
+    // Normalize the path to handle Unicode escape sequences
+    const normalizedPath = normalizePathWithUnicode(path);
+    
+    // Properly encode the path parameter for UTF-8 support
+    url.searchParams.append('path', normalizedPath);
 
     const headers: Record<string, string> = {};
     if (session?.access_token) {

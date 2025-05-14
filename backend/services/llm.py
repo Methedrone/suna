@@ -33,9 +33,9 @@ except ImportError:
 litellm.modify_params=True
 
 # Constants
-MAX_RETRIES = 3
+MAX_RETRIES = 2
 RATE_LIMIT_DELAY = 30
-RETRY_DELAY = 5
+RETRY_DELAY = 0.1
 
 class LLMError(Exception):
     """Base exception for LLM-related errors."""
